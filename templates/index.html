@@ -1,38 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Analytics Platform</title>
+    <title>{{ t('title') }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Language Switch Styles */
+        .lang-switch {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .lang-btn {
+            padding: 8px 16px;
+            border: 2px solid #00d4ff;
+            background: transparent;
+            color: #00d4ff;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .lang-btn:hover, .lang-btn.active {
+            background: #00d4ff;
+            color: #0a0a0a;
+        }
+        
+        /* Loading Spinner Styles */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 10, 0.9);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .loading-overlay.active {
+            display: flex;
+        }
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 212, 255, 0.3);
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            color: #00d4ff;
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        
+        /* Button Loading State */
+        .btn-analyze:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn-analyze .btn-text {
+            display: inline;
+        }
+        .btn-analyze .btn-loading {
+            display: none;
+        }
+        .btn-analyze:disabled .btn-text {
+            display: none;
+        }
+        .btn-analyze:disabled .btn-loading {
+            display: inline;
+        }
+    </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">{{ t('loading') }}</div>
+    </div>
+
     <div class="container">
+        <!-- Language Switch -->
+        <div class="lang-switch">
+            <button class="lang-btn {% if lang == 'en' %}active{% endif %}" onclick="switchLang('en')">🇬🇧 English</button>
+            <button class="lang-btn {% if lang == 'zh' %}active{% endif %}" onclick="switchLang('zh')">🇨🇳 中文</button>
+        </div>
+
         <header>
-            <h1>📈 Stock Analytics Platform</h1>
-            <p class="subtitle">AI-Powered Stock Market Analysis & Forecasting</p>
+            <h1>{{ t('title') }}</h1>
+            <p class="subtitle">{{ t('subtitle') }}</p>
         </header>
 
         <!-- Stock Selector -->
         <div class="card selector-card">
-            <form method="GET" action="/" class="stock-selector">
-                <label for="symbol">Select Stock:</label>
-                <select name="symbol" id="symbol" onchange="this.form.submit()">
+            <form method="GET" action="/" class="stock-selector" id="stockForm">
+                <input type="hidden" name="lang" value="{{ lang }}">
+                <label for="symbol">{{ t('select_stock') }}</label>
+                <select name="symbol" id="symbol">
                     {% for sym in symbols %}
                     <option value="{{ sym }}" {% if sym == result.symbol %}selected{% endif %}>{{ sym }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn-analyze">Analyze</button>
+                <button type="submit" class="btn-analyze" id="analyzeBtn">
+                    <span class="btn-text">{{ t('analyze') }}</span>
+                    <span class="btn-loading">{{ t('analyzing') }}</span>
+                </button>
             </form>
         </div>
 
-        {% if result.error %}
+        {% if result and result.error %}
         <div class="card error-card">
-            <h2>⚠️ Error</h2>
+            <h2>{{ t('error') }}</h2>
             <p>{{ result.error }}</p>
         </div>
-        {% else %}
+        {% elif result %}
         <main>
             <!-- Main Stats Card -->
             <div class="card main-card">
@@ -43,17 +136,17 @@
                 
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <label>Current Price</label>
+                        <label>{{ t('current_price') }}</label>
                         <span class="price">${{ "{:,.2f}".format(result.current_price) }}</span>
                     </div>
                     
                     <div class="stat-item">
-                        <label>Predicted Price</label>
+                        <label>{{ t('predicted_price') }}</label>
                         <span class="price">${{ "{:,.2f}".format(result.predicted_price) }}</span>
                     </div>
                     
                     <div class="stat-item">
-                        <label>Price Change</label>
+                        <label>{{ t('price_change') }}</label>
                         <span class="change {% if result.price_change > 0 %}positive{% elif result.price_change < 0 %}negative{% endif %}">
                             {% if result.price_change > 0 %}+{% endif %}${{ "{:,.2f}".format(result.price_change) }}
                             ({% if result.price_change_pct > 0 %}+{% endif %}{{ "{:.2f}".format(result.price_change_pct) }}%)
@@ -61,14 +154,14 @@
                     </div>
                     
                     <div class="stat-item">
-                        <label>Confidence</label>
-                        <span class="confidence {{ result.confidence|lower }}">{{ result.confidence }}</span>
+                        <label>{{ t('confidence') }}</label>
+                        <span class="confidence {{ result.confidence|lower }}">{{ t(result.confidence|lower) }}</span>
                     </div>
                 </div>
 
                 <div class="signal-container">
                     <div class="signal" style="background-color: {{ result.signal_color }}">
-                        <span class="signal-text">{{ result.signal }}</span>
+                        <span class="signal-text">{{ t(result.signal|lower) }}</span>
                     </div>
                     <p class="signal-description">{{ result.signal_description }}</p>
                 </div>
@@ -76,36 +169,36 @@
 
             <!-- Indicators Card -->
             <div class="card indicators-card">
-                <h3>Technical Indicators</h3>
+                <h3>{{ t('technical_indicators') }}</h3>
                 <div class="indicators-grid">
                     <div class="indicator-item">
-                        <label>RSI</label>
+                        <label>{{ t('rsi') }}</label>
                         <span class="value">{{ "{:.1f}".format(result.indicators.rsi) if result.indicators.rsi else 'N/A' }}</span>
                         <span class="signal-badge {{ result.indicator_signals.rsi_signal|lower if result.indicator_signals.rsi_signal else '' }}">
-                            {{ result.indicator_signals.rsi_signal if result.indicator_signals.rsi_signal else 'N/A' }}
+                            {{ t(result.indicator_signals.rsi_signal|lower) if result.indicator_signals.rsi_signal else 'N/A' }}
                         </span>
                     </div>
                     <div class="indicator-item">
-                        <label>SMA (20)</label>
+                        <label>{{ t('sma') }}</label>
                         <span class="value">${{ "{:,.2f}".format(result.indicators.sma) if result.indicators.sma else 'N/A' }}</span>
                     </div>
                     <div class="indicator-item">
-                        <label>EMA (20)</label>
+                        <label>{{ t('ema') }}</label>
                         <span class="value">${{ "{:,.2f}".format(result.indicators.ema) if result.indicators.ema else 'N/A' }}</span>
                     </div>
                     <div class="indicator-item">
-                        <label>MACD</label>
+                        <label>{{ t('macd') }}</label>
                         <span class="value">{{ "{:.2f}".format(result.indicators.macd) if result.indicators.macd else 'N/A' }}</span>
                         <span class="signal-badge {{ result.indicator_signals.macd_signal|lower if result.indicator_signals.macd_signal else '' }}">
-                            {{ result.indicator_signals.macd_signal if result.indicator_signals.macd_signal else 'N/A' }}
+                            {{ t(result.indicator_signals.macd_signal|lower) if result.indicator_signals.macd_signal else 'N/A' }}
                         </span>
                     </div>
                     <div class="indicator-item">
-                        <label>Momentum</label>
+                        <label>{{ t('momentum') }}</label>
                         <span class="value">{{ "{:.2f}".format(result.indicators.momentum) if result.indicators.momentum else 'N/A' }}</span>
                     </div>
                     <div class="indicator-item">
-                        <label>Bollinger Bands</label>
+                        <label>{{ t('bollinger') }}</label>
                         <span class="value">${{ "{:,.2f}".format(result.indicators.bb_lower) if result.indicators.bb_lower else 'N/A' }} - ${{ "{:,.2f}".format(result.indicators.bb_upper) if result.indicators.bb_upper else 'N/A' }}</span>
                     </div>
                 </div>
@@ -113,31 +206,31 @@
 
             <!-- AI Analysis Card -->
             <div class="card ai-card">
-                <h3>🤖 AI Analysis</h3>
+                <h3>{{ t('ai_analysis') }}</h3>
                 <p class="ai-text">{{ result.ai_analysis.analysis }}</p>
                 <div class="ai-meta">
-                    <span>Model: {{ result.ai_analysis.model }}</span>
-                    <span>Confidence: {{ result.ai_analysis.confidence }}</span>
+                    <span>{{ t('model') }} {{ result.ai_analysis.model }}</span>
+                    <span>{{ t('confidence') }}: {{ result.ai_analysis.confidence }}</span>
                 </div>
             </div>
 
             <!-- Risk Assessment Card -->
             <div class="card risk-card">
-                <h3>⚠️ Risk Assessment</h3>
+                <h3>{{ t('risk_assessment') }}</h3>
                 <div class="risk-content">
                     <div class="risk-level">
-                        <label>Risk Level:</label>
+                        <label>{{ t('risk_level') }}</label>
                         <span class="risk-badge {{ result.risk_assessment.risk_level|replace('-', '') }}">
-                            {{ result.risk_assessment.risk_level|upper }}
+                            {{ t(result.risk_assessment.risk_level|replace('-', '')|lower) if result.risk_assessment.risk_level != 'unknown' else 'N/A' }}
                         </span>
                     </div>
-                    <p class="risk-recommendation">{{ result.risk_assessment.recommendation }}</p>
+                    <p class="risk-recommendation">{{ t('risk_recommendation') }}</p>
                 </div>
             </div>
 
             <!-- Chart Card -->
             <div class="card chart-card">
-                <h3>Price History (Last 30 Days)</h3>
+                <h3>{{ t('price_history') }}</h3>
                 <div class="chart-container">
                     <canvas id="priceChart"></canvas>
                 </div>
@@ -145,16 +238,16 @@
 
             <!-- Prediction History Card -->
             <div class="card history-card">
-                <h3>Analysis History</h3>
+                <h3>{{ t('analysis_history') }}</h3>
                 {% if history %}
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th>Time</th>
-                            <th>Symbol</th>
-                            <th>Current</th>
-                            <th>Predicted</th>
-                            <th>Signal</th>
+                            <th>{{ t('time') }}</th>
+                            <th>{{ t('symbol') }}</th>
+                            <th>{{ t('current') }}</th>
+                            <th>{{ t('predicted') }}</th>
+                            <th>{{ t('signal') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -167,7 +260,7 @@
                             <td>
                                 <span class="signal-badge 
                                     {% if item.signal == 'BUY' %}buy{% elif item.signal == 'SELL' %}sell{% else %}hold{% endif %}">
-                                    {{ item.signal }}
+                                    {{ t(item.signal|lower) }}
                                 </span>
                             </td>
                         </tr>
@@ -175,28 +268,46 @@
                     </tbody>
                 </table>
                 {% else %}
-                <p class="no-history">No analysis history yet. Select a stock to begin.</p>
+                <p class="no-history">{{ t('no_history') }}</p>
                 {% endif %}
             </div>
         </main>
         {% endif %}
 
         <footer>
-            <p>Stock Analytics Platform | REST API available for mobile integration</p>
-            <p class="api-info">API: /api/analyze | /api/batch | /api/export</p>
+            <p>{{ t('footer') }}</p>
+            <p class="api-info">{{ t('api_endpoints') }}</p>
         </footer>
     </div>
 
     <script>
+        // Language switching function
+        function switchLang(lang) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('lang', lang);
+            window.location.href = url.toString();
+        }
+
+        // Show loading overlay on form submit
+        document.getElementById('stockForm').addEventListener('submit', function() {
+            document.getElementById('loadingOverlay').classList.add('active');
+            document.getElementById('analyzeBtn').disabled = true;
+        });
+
+        // Hide loading overlay when page loads
+        window.addEventListener('load', function() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        });
+
         // Chart.js configuration
-        {% if not result.error %}
+        {% if result and not result.error %}
         const ctx = document.getElementById('priceChart').getContext('2d');
         
         const dates = {{ result.dates | tojson }};
         const prices = {{ result.prices | tojson }};
         
         // Add predicted point
-        const predictedDate = 'Predicted';
+        const predictedDate = '{{ "预测" if lang == "zh" else "Predicted" }}';
         const predictedPrice = {{ result.predicted_price }};
         
         const allDates = [...dates, predictedDate];
@@ -207,7 +318,7 @@
             data: {
                 labels: allDates,
                 datasets: [{
-                    label: '{{ result.symbol }} Price',
+                    label: '{{ result.symbol }} {{ "价格" if lang == "zh" else "Price" }}',
                     data: allPrices,
                     borderColor: '#00d4ff',
                     backgroundColor: 'rgba(0, 212, 255, 0.1)',
