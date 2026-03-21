@@ -23,6 +23,7 @@ from translations import t, get_all_translations
 
 app = Flask(__name__)
 app.secret_key = 'stock-analytics-secret-key-2024'
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB max file size
 
 # Store analysis history
 analysis_history = []

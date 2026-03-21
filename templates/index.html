@@ -82,6 +82,162 @@
         .btn-analyze:disabled .btn-loading {
             display: inline;
         }
+        
+        /* Upload Card Styles */
+        .upload-card {
+            text-align: center;
+        }
+        .upload-card h2 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .upload-description {
+            color: #888888;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .upload-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .file-input {
+            display: none;
+        }
+        .file-label {
+            padding: 12px 24px;
+            background: rgba(0, 212, 255, 0.1);
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            color: #00d4ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-label:hover {
+            background: rgba(0, 212, 255, 0.2);
+        }
+        .file-name {
+            color: #888888;
+            font-size: 14px;
+        }
+        .btn-upload {
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border: none;
+            border-radius: 8px;
+            color: #0a0a0a;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+        .btn-upload:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-upload .btn-text {
+            display: inline;
+        }
+        .btn-upload .btn-loading {
+            display: none;
+        }
+        .btn-upload:disabled .btn-text {
+            display: none;
+        }
+        .btn-upload:disabled .btn-loading {
+            display: inline;
+        }
+        .upload-status {
+            margin-top: 15px;
+            font-size: 14px;
+            min-height: 20px;
+        }
+        .upload-result {
+            margin-top: 20px;
+        }
+        .report-summary {
+            background: rgba(0, 212, 255, 0.05);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: left;
+        }
+        .report-summary h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .report-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .report-stats .stat {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-label {
+            display: block;
+            font-size: 12px;
+            color: #888888;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            display: block;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+        .stat.success .stat-value { color: #00ff88; }
+        .stat.error .stat-value { color: #ff4444; }
+        .stat.up .stat-value { color: #00ff88; }
+        .stat.down .stat-value { color: #ff4444; }
+        .stat.hold .stat-value { color: #888888; }
+        .top-picks {
+            margin: 15px 0;
+        }
+        .top-picks h4 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .top-picks ul {
+            list-style: none;
+            padding: 0;
+        }
+        .top-picks li {
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        .positive { color: #00ff88; }
+        .negative { color: #ff4444; }
+        .download-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            color: #0a0a0a;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -118,6 +274,28 @@
                     <span class="btn-loading" id="analyzingBtnText">{{ t('analyzing') }}</span>
                 </button>
             </form>
+        </div>
+
+        <!-- Excel Upload Card -->
+        <div class="card upload-card">
+            <h2 id="uploadTitle">📊 Upload Stock Excel</h2>
+            <p class="upload-description" id="uploadDesc">Upload an Excel file with stock codes (Column A) and names (Column B) for batch analysis.</p>
+            
+            <div class="upload-container">
+                <input type="file" id="fileInput" accept=".xlsx,.xls" class="file-input" />
+                <label for="fileInput" class="file-label">
+                    <span id="fileLabelText">Choose Excel File</span>
+                </label>
+                <span id="fileName" class="file-name">No file selected</span>
+            </div>
+            
+            <button onclick="uploadFile()" class="btn-upload" id="uploadBtn">
+                <span class="btn-text" id="uploadBtnText">🚀 Analyze Batch</span>
+                <span class="btn-loading" id="uploadingBtnText">⏳ Processing...</span>
+            </button>
+            
+            <p id="uploadStatus" class="upload-status"></p>
+            <div id="uploadResult" class="upload-result"></div>
         </div>
 
         {% if result and result.error %}
@@ -464,6 +642,105 @@
             document.getElementById('loadingOverlay').classList.remove('active');
             updateUIText();
         });
+
+        // File input change handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const fileName = e.target.files[0] ? e.target.files[0].name : 'No file selected';
+            document.getElementById('fileName').textContent = fileName;
+        });
+
+        // Upload file function
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const status = document.getElementById('uploadStatus');
+            const resultDiv = document.getElementById('uploadResult');
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            if (!fileInput.files.length) {
+                status.textContent = '⚠️ Please select a file';
+                status.style.color = '#ff4444';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Update UI
+            status.textContent = '⏳ Uploading & processing...';
+            status.style.color = '#00d4ff';
+            resultDiv.innerHTML = '';
+            uploadBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    status.textContent = '✅ Analysis complete!';
+                    status.style.color = '#00ff88';
+
+                    const report = data.data.report;
+                    resultDiv.innerHTML = `
+                        <div class="report-summary">
+                            <h3>📊 Analysis Report</h3>
+                            <div class="report-stats">
+                                <div class="stat">
+                                    <span class="stat-label">Total Stocks:</span>
+                                    <span class="stat-value">${report.total}</span>
+                                </div>
+                                <div class="stat success">
+                                    <span class="stat-label">✅ Successful:</span>
+                                    <span class="stat-value">${report.successful}</span>
+                                </div>
+                                <div class="stat error">
+                                    <span class="stat-label">❌ Failed:</span>
+                                    <span class="stat-value">${report.failed}</span>
+                                </div>
+                                <div class="stat up">
+                                    <span class="stat-label">📈 UP:</span>
+                                    <span class="stat-value">${report.up}</span>
+                                </div>
+                                <div class="stat down">
+                                    <span class="stat-label">📉 DOWN:</span>
+                                    <span class="stat-value">${report.down}</span>
+                                </div>
+                                <div class="stat hold">
+                                    <span class="stat-label">➡️ HOLD:</span>
+                                    <span class="stat-value">${report.hold}</span>
+                                </div>
+                            </div>
+                            ${report.top_picks && report.top_picks.length > 0 ? `
+                                <div class="top-picks">
+                                    <h4>🏆 Top Picks</h4>
+                                    <ul>
+                                        ${report.top_picks.map(pick => `
+                                            <li>${pick.code} (${pick.name}) - <span class="positive">+${pick.price_change_pct}%</span></li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            <a href="${data.data.download_url}" class="download-btn" target="_blank">
+                                📥 Download Excel Report
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    status.textContent = '❌ Error: ' + data.error;
+                    status.style.color = '#ff4444';
+                }
+
+            } catch (err) {
+                status.textContent = '❌ Request failed: ' + err.message;
+                status.style.color = '#ff4444';
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        }
 
         // Chart.js configuration
         {% if result and not result.error %}
