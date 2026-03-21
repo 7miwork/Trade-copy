@@ -88,41 +88,41 @@
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner"></div>
-        <div class="loading-text">{{ t('loading') }}</div>
+        <div class="loading-text" id="loadingText">{{ t('loading') }}</div>
     </div>
 
     <div class="container">
         <!-- Language Switch -->
         <div class="lang-switch">
-            <button class="lang-btn {% if lang == 'en' %}active{% endif %}" onclick="switchLang('en')">🇬🇧 English</button>
-            <button class="lang-btn {% if lang == 'zh' %}active{% endif %}" onclick="switchLang('zh')">🇨🇳 中文</button>
+            <button class="lang-btn {% if lang == 'en' %}active{% endif %}" onclick="switchLang('en')" id="langEnBtn">🇬🇧 English</button>
+            <button class="lang-btn {% if lang == 'zh' %}active{% endif %}" onclick="switchLang('zh')" id="langZhBtn">🇨🇳 中文</button>
         </div>
 
         <header>
-            <h1>{{ t('title') }}</h1>
-            <p class="subtitle">{{ t('subtitle') }}</p>
+            <h1 id="mainTitle">{{ t('title') }}</h1>
+            <p class="subtitle" id="subtitle">{{ t('subtitle') }}</p>
         </header>
 
         <!-- Stock Selector -->
         <div class="card selector-card">
             <form method="GET" action="/" class="stock-selector" id="stockForm">
-                <input type="hidden" name="lang" value="{{ lang }}">
-                <label for="symbol">{{ t('select_stock') }}</label>
+                <input type="hidden" name="lang" value="{{ lang }}" id="langInput">
+                <label for="symbol" id="selectStockLabel">{{ t('select_stock') }}</label>
                 <select name="symbol" id="symbol">
                     {% for sym in symbols %}
                     <option value="{{ sym }}" {% if sym == result.symbol %}selected{% endif %}>{{ sym }}</option>
                     {% endfor %}
                 </select>
                 <button type="submit" class="btn-analyze" id="analyzeBtn">
-                    <span class="btn-text">{{ t('analyze') }}</span>
-                    <span class="btn-loading">{{ t('analyzing') }}</span>
+                    <span class="btn-text" id="analyzeBtnText">{{ t('analyze') }}</span>
+                    <span class="btn-loading" id="analyzingBtnText">{{ t('analyzing') }}</span>
                 </button>
             </form>
         </div>
 
         {% if result and result.error %}
         <div class="card error-card">
-            <h2>{{ t('error') }}</h2>
+            <h2 id="errorTitle">{{ t('error') }}</h2>
             <p>{{ result.error }}</p>
         </div>
         {% elif result %}
@@ -136,17 +136,17 @@
                 
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <label>{{ t('current_price') }}</label>
+                        <label id="currentPriceLabel">{{ t('current_price') }}</label>
                         <span class="price">${{ "{:,.2f}".format(result.current_price) }}</span>
                     </div>
                     
                     <div class="stat-item">
-                        <label>{{ t('predicted_price') }}</label>
+                        <label id="predictedPriceLabel">{{ t('predicted_price') }}</label>
                         <span class="price">${{ "{:,.2f}".format(result.predicted_price) }}</span>
                     </div>
                     
                     <div class="stat-item">
-                        <label>{{ t('price_change') }}</label>
+                        <label id="priceChangeLabel">{{ t('price_change') }}</label>
                         <span class="change {% if result.price_change > 0 %}positive{% elif result.price_change < 0 %}negative{% endif %}">
                             {% if result.price_change > 0 %}+{% endif %}${{ "{:,.2f}".format(result.price_change) }}
                             ({% if result.price_change_pct > 0 %}+{% endif %}{{ "{:.2f}".format(result.price_change_pct) }}%)
@@ -154,7 +154,7 @@
                     </div>
                     
                     <div class="stat-item">
-                        <label>{{ t('confidence') }}</label>
+                        <label id="confidenceLabel">{{ t('confidence') }}</label>
                         <span class="confidence {{ result.confidence|lower }}">{{ t(result.confidence|lower) }}</span>
                     </div>
                 </div>
@@ -169,7 +169,7 @@
 
             <!-- Indicators Card -->
             <div class="card indicators-card">
-                <h3>{{ t('technical_indicators') }}</h3>
+                <h3 id="technicalIndicatorsTitle">{{ t('technical_indicators') }}</h3>
                 <div class="indicators-grid">
                     <div class="indicator-item">
                         <label>{{ t('rsi') }}</label>
@@ -206,7 +206,7 @@
 
             <!-- AI Analysis Card -->
             <div class="card ai-card">
-                <h3>{{ t('ai_analysis') }}</h3>
+                <h3 id="aiAnalysisTitle">{{ t('ai_analysis') }}</h3>
                 <p class="ai-text">{{ result.ai_analysis.analysis }}</p>
                 <div class="ai-meta">
                     <span>{{ t('model') }} {{ result.ai_analysis.model }}</span>
@@ -216,10 +216,10 @@
 
             <!-- Risk Assessment Card -->
             <div class="card risk-card">
-                <h3>{{ t('risk_assessment') }}</h3>
+                <h3 id="riskAssessmentTitle">{{ t('risk_assessment') }}</h3>
                 <div class="risk-content">
                     <div class="risk-level">
-                        <label>{{ t('risk_level') }}</label>
+                        <label id="riskLevelLabel">{{ t('risk_level') }}</label>
                         <span class="risk-badge {{ result.risk_assessment.risk_level|replace('-', '') }}">
                             {{ t(result.risk_assessment.risk_level|replace('-', '')|lower) if result.risk_assessment.risk_level != 'unknown' else 'N/A' }}
                         </span>
@@ -230,7 +230,7 @@
 
             <!-- Chart Card -->
             <div class="card chart-card">
-                <h3>{{ t('price_history') }}</h3>
+                <h3 id="priceHistoryTitle">{{ t('price_history') }}</h3>
                 <div class="chart-container">
                     <canvas id="priceChart"></canvas>
                 </div>
@@ -238,16 +238,16 @@
 
             <!-- Prediction History Card -->
             <div class="card history-card">
-                <h3>{{ t('analysis_history') }}</h3>
+                <h3 id="analysisHistoryTitle">{{ t('analysis_history') }}</h3>
                 {% if history %}
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th>{{ t('time') }}</th>
-                            <th>{{ t('symbol') }}</th>
-                            <th>{{ t('current') }}</th>
-                            <th>{{ t('predicted') }}</th>
-                            <th>{{ t('signal') }}</th>
+                            <th id="timeHeader">{{ t('time') }}</th>
+                            <th id="symbolHeader">{{ t('symbol') }}</th>
+                            <th id="currentHeader">{{ t('current') }}</th>
+                            <th id="predictedHeader">{{ t('predicted') }}</th>
+                            <th id="signalHeader">{{ t('signal') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -268,24 +268,189 @@
                     </tbody>
                 </table>
                 {% else %}
-                <p class="no-history">{{ t('no_history') }}</p>
+                <p class="no-history" id="noHistoryText">{{ t('no_history') }}</p>
                 {% endif %}
             </div>
         </main>
         {% endif %}
 
         <footer>
-            <p>{{ t('footer') }}</p>
-            <p class="api-info">{{ t('api_endpoints') }}</p>
+            <p id="footerText">{{ t('footer') }}</p>
+            <p class="api-info" id="apiEndpoints">{{ t('api_endpoints') }}</p>
         </footer>
     </div>
 
     <script>
+        // JavaScript translations
+        const translations = {
+            en: {
+                title: "📈 Stock Analytics Platform",
+                subtitle: "AI-Powered Stock Market Analysis & Forecasting",
+                select_stock: "Select Stock:",
+                analyze: "Analyze",
+                analyzing: "Analyzing...",
+                current_price: "Current Price",
+                predicted_price: "Predicted Price",
+                price_change: "Price Change",
+                confidence: "Confidence",
+                technical_indicators: "Technical Indicators",
+                ai_analysis: "🤖 AI Analysis",
+                risk_assessment: "⚠️ Risk Assessment",
+                risk_level: "Risk Level:",
+                price_history: "Price History (Last 30 Days)",
+                analysis_history: "Analysis History",
+                time: "Time",
+                symbol: "Symbol",
+                current: "Current",
+                predicted: "Predicted",
+                signal: "Signal",
+                no_history: "No analysis history yet. Select a stock to begin.",
+                error: "⚠️ Error",
+                loading: "Loading analysis...",
+                buy: "BUY",
+                sell: "SELL",
+                hold: "HOLD",
+                high: "HIGH",
+                medium: "MEDIUM",
+                low: "LOW",
+                oversold: "OVERSOLD",
+                overbought: "OVERBOUGHT",
+                neutral: "NEUTRAL",
+                bullish: "BULLISH",
+                bearish: "BEARISH",
+                rsi: "RSI",
+                sma: "SMA (20)",
+                ema: "EMA (20)",
+                macd: "MACD",
+                momentum: "Momentum",
+                bollinger: "Bollinger Bands",
+                model: "Model:",
+                risk_recommendation: "Standard position sizing with stop-loss",
+                footer: "Stock Analytics Platform | REST API available for mobile integration",
+                api_endpoints: "API: /api/analyze | /api/batch | /api/export",
+                predicted_label: "Predicted",
+                price_label: "Price"
+            },
+            zh: {
+                title: "📈 股票分析平台",
+                subtitle: "AI驱动的股票市场分析与预测",
+                select_stock: "选择股票:",
+                analyze: "分析",
+                analyzing: "分析中...",
+                current_price: "当前价格",
+                predicted_price: "预测价格",
+                price_change: "价格变化",
+                confidence: "置信度",
+                technical_indicators: "技术指标",
+                ai_analysis: "🤖 AI分析",
+                risk_assessment: "⚠️ 风险评估",
+                risk_level: "风险等级:",
+                price_history: "价格历史 (最近30天)",
+                analysis_history: "分析历史",
+                time: "时间",
+                symbol: "股票",
+                current: "当前",
+                predicted: "预测",
+                signal: "信号",
+                no_history: "暂无分析历史。选择股票开始分析。",
+                error: "⚠️ 错误",
+                loading: "加载分析中...",
+                buy: "买入",
+                sell: "卖出",
+                hold: "持有",
+                high: "高",
+                medium: "中",
+                low: "低",
+                oversold: "超卖",
+                overbought: "超买",
+                neutral: "中性",
+                bullish: "看涨",
+                bearish: "看跌",
+                rsi: "RSI",
+                sma: "SMA (20)",
+                ema: "EMA (20)",
+                macd: "MACD",
+                momentum: "动量",
+                bollinger: "布林带",
+                model: "模型:",
+                risk_recommendation: "标准仓位管理，设置止损",
+                footer: "股票分析平台 | REST API可用于移动应用集成",
+                api_endpoints: "API: /api/analyze | /api/batch | /api/export",
+                predicted_label: "预测",
+                price_label: "价格"
+            }
+        };
+
+        // Get current language from localStorage or URL
+        function getCurrentLang() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            const storedLang = localStorage.getItem('lang');
+            return urlLang || storedLang || 'en';
+        }
+
+        // Get translation
+        function t(key) {
+            const lang = getCurrentLang();
+            return translations[lang]?.[key] || translations['en']?.[key] || key;
+        }
+
         // Language switching function
         function switchLang(lang) {
+            localStorage.setItem('lang', lang);
             const url = new URL(window.location.href);
             url.searchParams.set('lang', lang);
             window.location.href = url.toString();
+        }
+
+        // Update UI text based on language
+        function updateUIText() {
+            const lang = getCurrentLang();
+            
+            // Update static elements
+            document.getElementById('mainTitle').textContent = t('title');
+            document.getElementById('subtitle').textContent = t('subtitle');
+            document.getElementById('selectStockLabel').textContent = t('select_stock');
+            document.getElementById('analyzeBtnText').textContent = t('analyze');
+            document.getElementById('analyzingBtnText').textContent = t('analyzing');
+            document.getElementById('loadingText').textContent = t('loading');
+            
+            // Update language buttons
+            document.getElementById('langEnBtn').classList.toggle('active', lang === 'en');
+            document.getElementById('langZhBtn').classList.toggle('active', lang === 'zh');
+            
+            // Update hidden lang input
+            document.getElementById('langInput').value = lang;
+            
+            // Update other elements if they exist
+            const elementsToUpdate = [
+                ['errorTitle', 'error'],
+                ['currentPriceLabel', 'current_price'],
+                ['predictedPriceLabel', 'predicted_price'],
+                ['priceChangeLabel', 'price_change'],
+                ['confidenceLabel', 'confidence'],
+                ['technicalIndicatorsTitle', 'technical_indicators'],
+                ['aiAnalysisTitle', 'ai_analysis'],
+                ['riskAssessmentTitle', 'risk_assessment'],
+                ['riskLevelLabel', 'risk_level'],
+                ['priceHistoryTitle', 'price_history'],
+                ['analysisHistoryTitle', 'analysis_history'],
+                ['timeHeader', 'time'],
+                ['symbolHeader', 'symbol'],
+                ['currentHeader', 'current'],
+                ['predictedHeader', 'predicted'],
+                ['signalHeader', 'signal'],
+                ['noHistoryText', 'no_history'],
+                ['footerText', 'footer'],
+                ['apiEndpoints', 'api_endpoints']
+            ];
+            
+            elementsToUpdate.forEach(([id, key]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = t(key);
+                }
+            });
         }
 
         // Show loading overlay on form submit
@@ -294,9 +459,10 @@
             document.getElementById('analyzeBtn').disabled = true;
         });
 
-        // Hide loading overlay when page loads
+        // Initialize on page load
         window.addEventListener('load', function() {
             document.getElementById('loadingOverlay').classList.remove('active');
+            updateUIText();
         });
 
         // Chart.js configuration
@@ -307,7 +473,7 @@
         const prices = {{ result.prices | tojson }};
         
         // Add predicted point
-        const predictedDate = '{{ "预测" if lang == "zh" else "Predicted" }}';
+        const predictedDate = t('predicted_label');
         const predictedPrice = {{ result.predicted_price }};
         
         const allDates = [...dates, predictedDate];
@@ -318,7 +484,7 @@
             data: {
                 labels: allDates,
                 datasets: [{
-                    label: '{{ result.symbol }} {{ "价格" if lang == "zh" else "Price" }}',
+                    label: '{{ result.symbol }} ' + t('price_label'),
                     data: allPrices,
                     borderColor: '#00d4ff',
                     backgroundColor: 'rgba(0, 212, 255, 0.1)',

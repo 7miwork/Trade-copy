@@ -18,6 +18,7 @@ from model import train_random_forest, predict_next_price, get_feature_importanc
 from strategy import generate_signal, get_signal_color, get_signal_description, analyze_indicators, get_combined_signal
 from ai_placeholder import get_ai_analysis, get_risk_assessment
 from config import SUPPORTED_SYMBOLS, EXPORT_PATH, DEFAULT_SYMBOL
+from translations import t, get_all_translations
 
 app = Flask(__name__)
 app.secret_key = 'stock-analytics-secret-key-2024'
@@ -29,122 +30,13 @@ analysis_history = []
 analysis_cache = {}
 CACHE_DURATION = 300  # 5 minutes cache
 
-# Multi-language translations
-TRANSLATIONS = {
-    'en': {
-        'title': '📈 Stock Analytics Platform',
-        'subtitle': 'AI-Powered Stock Market Analysis & Forecasting',
-        'select_stock': 'Select Stock:',
-        'analyze': 'Analyze',
-        'analyzing': 'Analyzing...',
-        'current_price': 'Current Price',
-        'predicted_price': 'Predicted Price',
-        'price_change': 'Price Change',
-        'confidence': 'Confidence',
-        'technical_indicators': 'Technical Indicators',
-        'ai_analysis': '🤖 AI Analysis',
-        'risk_assessment': '⚠️ Risk Assessment',
-        'risk_level': 'Risk Level:',
-        'price_history': 'Price History (Last 30 Days)',
-        'analysis_history': 'Analysis History',
-        'time': 'Time',
-        'symbol': 'Symbol',
-        'current': 'Current',
-        'predicted': 'Predicted',
-        'signal': 'Signal',
-        'no_history': 'No analysis history yet. Select a stock to begin.',
-        'error': '⚠️ Error',
-        'loading': 'Loading analysis...',
-        'analysis_complete': 'Analysis complete',
-        'analysis_timeout': 'Analysis timeout',
-        'analysis_failed': 'Analysis failed',
-        'api_endpoints': 'API: /api/analyze | /api/batch | /api/export',
-        'footer': 'Stock Analytics Platform | REST API available for mobile integration',
-        'buy': 'BUY',
-        'sell': 'SELL',
-        'hold': 'HOLD',
-        'high': 'HIGH',
-        'medium': 'MEDIUM',
-        'low': 'LOW',
-        'oversold': 'OVERSOLD',
-        'overbought': 'OVERBOUGHT',
-        'neutral': 'NEUTRAL',
-        'bullish': 'BULLISH',
-        'bearish': 'BEARISH',
-        'rsi': 'RSI',
-        'sma': 'SMA (20)',
-        'ema': 'EMA (20)',
-        'macd': 'MACD',
-        'momentum': 'Momentum',
-        'bollinger': 'Bollinger Bands',
-        'model': 'Model:',
-        'risk_recommendation': 'Standard position sizing with stop-loss'
-    },
-    'zh': {
-        'title': '📈 股票分析平台',
-        'subtitle': 'AI驱动的股票市场分析与预测',
-        'select_stock': '选择股票:',
-        'analyze': '分析',
-        'analyzing': '分析中...',
-        'current_price': '当前价格',
-        'predicted_price': '预测价格',
-        'price_change': '价格变化',
-        'confidence': '置信度',
-        'technical_indicators': '技术指标',
-        'ai_analysis': '🤖 AI分析',
-        'risk_assessment': '⚠️ 风险评估',
-        'risk_level': '风险等级:',
-        'price_history': '价格历史 (最近30天)',
-        'analysis_history': '分析历史',
-        'time': '时间',
-        'symbol': '股票',
-        'current': '当前',
-        'predicted': '预测',
-        'signal': '信号',
-        'no_history': '暂无分析历史。选择股票开始分析。',
-        'error': '⚠️ 错误',
-        'loading': '加载分析中...',
-        'analysis_complete': '分析完成',
-        'analysis_timeout': '分析超时',
-        'analysis_failed': '分析失败',
-        'api_endpoints': 'API: /api/analyze | /api/batch | /api/export',
-        'footer': '股票分析平台 | REST API可用于移动应用集成',
-        'buy': '买入',
-        'sell': '卖出',
-        'hold': '持有',
-        'high': '高',
-        'medium': '中',
-        'low': '低',
-        'oversold': '超卖',
-        'overbought': '超买',
-        'neutral': '中性',
-        'bullish': '看涨',
-        'bearish': '看跌',
-        'rsi': 'RSI',
-        'sma': 'SMA (20)',
-        'ema': 'EMA (20)',
-        'macd': 'MACD',
-        'momentum': '动量',
-        'bollinger': '布林带',
-        'model': '模型:',
-        'risk_recommendation': '标准仓位管理，设置止损'
-    }
-}
-
 
 def get_lang():
     """Get language from request parameter or default to English"""
     lang = request.args.get('lang', 'en').lower()
-    if lang not in TRANSLATIONS:
+    if lang not in ['en', 'zh']:
         lang = 'en'
     return lang
-
-
-def t(key, lang=None):
-    """Translate a key to the current language"""
-    if lang is None:
-        lang = get_lang()
-    return TRANSLATIONS.get(lang, TRANSLATIONS['en']).get(key, key)
 
 
 def api_response(data=None, error=None, status_code=200, lang='en'):
