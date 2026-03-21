@@ -299,22 +299,7 @@ def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
 
-if __name__ == '__main__':
-    print("=" * 60)
-    print("Stock Market Analytics Platform")
-    print("=" * 60)
-    print(f"Supported symbols: {SUPPORTED_SYMBOLS}")
-    print(f"Starting server at http://127.0.0.1:5000")
-    print("=" * 60)
-    print("\nAPI Endpoints:")
-    print("  GET  /              - Web Dashboard")
-    print("  GET  /api/analyze   - Analyze single stock")
-    print("  GET  /api/batch     - Analyze multiple stocks")
-    print("  GET  /api/export    - Export to Excel")
-    print("  GET  /api/symbols   - List supported symbols")
-    print("  GET  /api/history   - Get analysis history")
-    print("=" * 60)
-    print("\nPress Ctrl+C to stop")
-    print("=" * 60)
-    
-    app.run(debug=True, host='127.0.0.1', port=5000)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
