@@ -724,19 +724,25 @@ def upload_file():
     """
     lang = get_lang()
     
+    print("[INFO] Upload endpoint called")
+    
     try:
         # Check if file is present
         if 'file' not in request.files:
+            print("[ERROR] No file in request.files")
             return api_response(error="No file provided", status_code=400, lang=lang)
         
         file = request.files['file']
+        print(f"[INFO] File received: {file.filename}")
         
         # Check if file was selected
         if file.filename == '':
+            print("[ERROR] Empty filename")
             return api_response(error="No file selected", status_code=400, lang=lang)
         
         # Validate file type
         if not allowed_file(file.filename):
+            print(f"[ERROR] Invalid file type: {file.filename}")
             return api_response(
                 error="Invalid file type. Please upload .xlsx or .xls file",
                 status_code=400,
@@ -756,6 +762,7 @@ def upload_file():
             df = pd.read_excel(upload_path)
             print(f"[INFO] Loaded Excel with {len(df)} rows")
         except Exception as e:
+            print(f"[ERROR] Failed to read Excel: {str(e)}")
             return api_response(
                 error=f"Failed to read Excel file: {str(e)}",
                 status_code=400,
@@ -764,9 +771,11 @@ def upload_file():
         
         # Validate Excel format
         if df.empty:
+            print("[ERROR] Excel file is empty")
             return api_response(error="Excel file is empty", status_code=400, lang=lang)
         
         if len(df.columns) < 2:
+            print(f"[ERROR] Excel has only {len(df.columns)} columns")
             return api_response(
                 error="Excel must have at least 2 columns (code, name)",
                 status_code=400,
@@ -775,6 +784,7 @@ def upload_file():
         
         # Check row limit
         if len(df) > 1000:
+            print(f"[ERROR] Excel has {len(df)} rows (max 1000)")
             return api_response(
                 error="Maximum 1000 rows allowed per upload",
                 status_code=400,
@@ -785,6 +795,7 @@ def upload_file():
         
         # Process batch
         processed_df, report = process_stock_batch(df)
+        print(f"[INFO] Batch processing complete. Report: {report}")
         
         # Save output Excel
         output_filename = f"analysis_{timestamp}.xlsx"
@@ -794,6 +805,7 @@ def upload_file():
             processed_df.to_excel(output_path, index=False, sheet_name='Stock Analysis')
             print(f"[INFO] Output saved: {output_path}")
         except Exception as e:
+            print(f"[ERROR] Failed to save output: {str(e)}")
             return api_response(
                 error=f"Failed to save output file: {str(e)}",
                 status_code=500,
@@ -803,17 +815,23 @@ def upload_file():
         # Clean up uploaded file
         try:
             os.remove(upload_path)
+            print(f"[INFO] Cleaned up upload file: {upload_path}")
         except Exception as e:
             print(f"[WARNING] Failed to clean up upload file: {str(e)}")
         
-        return api_response(data={
+        response_data = {
             "report": report,
             "download_url": f"/download/{output_filename}",
             "output_file": output_filename
-        }, lang=lang)
+        }
+        print(f"[INFO] Returning success response: {response_data}")
+        
+        return api_response(data=response_data, lang=lang)
     
     except Exception as e:
         print(f"[ERROR] Unexpected error in /api/upload: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return api_response(error=f"Internal server error: {str(e)}", status_code=500, lang=lang)
 
 
