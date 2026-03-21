@@ -3,7 +3,7 @@ Stock Market Analytics Platform - Flask Application
 REST API designed for future mobile app integration
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 from datetime import datetime
 import json
 import os
@@ -11,6 +11,7 @@ import pandas as pd
 import threading
 import time
 from functools import wraps
+from werkzeug.utils import secure_filename
 
 from data_loader import get_stock_data, get_multiple_stocks
 from analytics import add_all_indicators, get_indicator_summary
@@ -579,6 +580,278 @@ def api_history():
         "history": list(reversed(analysis_history)),
         "count": len(analysis_history)
     }, lang=get_lang())
+
+
+# ==================== EXCEL UPLOAD & BATCH PROCESSING ====================
+
+UPLOAD_FOLDER = 'uploads'
+OUTPUT_FOLDER = 'outputs'
+ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+
+# Create directories if they don't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def process_stock_batch(df):
+    """
+    Process batch of stocks from Excel file
+    
+    Args:
+        df (pd.DataFrame): DataFrame with columns [code, name]
+    
+    Returns:
+        tuple: (processed_df, report)
+    """
+    total = len(df)
+    successful = 0
+    failed = 0
+    up_count = 0
+    down_count = 0
+    hold_count = 0
+    top_picks = []
+    
+    # Initialize result columns
+    df['Prediction'] = ''
+    df['Confidence'] = ''
+    df['Signal'] = ''
+    df['Current_Price'] = ''
+    df['Predicted_Price'] = ''
+    df['Price_Change_Pct'] = ''
+    df['Reason'] = ''
+    df['Status'] = ''
+    
+    for index, row in df.iterrows():
+        try:
+            code = str(row.iloc[0]).strip().upper() if pd.notna(row.iloc[0]) else ''
+            name = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ''
+            
+            print(f"[INFO] Processing {index + 1}/{total}: {code} ({name})")
+            
+            if not code:
+                df.at[index, 'Status'] = 'Error'
+                df.at[index, 'Reason'] = 'Empty stock code'
+                failed += 1
+                continue
+            
+            # Run analysis pipeline
+            result = run_analysis_pipeline(code, timeout=10)
+            
+            if result and result.get('success', False):
+                # Determine prediction direction
+                price_change_pct = result.get('price_change_pct', 0)
+                signal = result.get('signal', 'HOLD')
+                
+                if signal == 'BUY':
+                    prediction = 'UP'
+                    up_count += 1
+                elif signal == 'SELL':
+                    prediction = 'DOWN'
+                    down_count += 1
+                else:
+                    prediction = 'HOLD'
+                    hold_count += 1
+                
+                # Fill in results
+                df.at[index, 'Prediction'] = prediction
+                df.at[index, 'Confidence'] = result.get('confidence', 'MEDIUM')
+                df.at[index, 'Signal'] = signal
+                df.at[index, 'Current_Price'] = round(result.get('current_price', 0), 2)
+                df.at[index, 'Predicted_Price'] = round(result.get('predicted_price', 0), 2)
+                df.at[index, 'Price_Change_Pct'] = round(price_change_pct, 2)
+                df.at[index, 'Reason'] = result.get('signal_description', '')
+                df.at[index, 'Status'] = 'Success'
+                
+                # Add to top picks if BUY signal with high confidence
+                if signal == 'BUY' and result.get('confidence') == 'HIGH':
+                    top_picks.append({
+                        'code': code,
+                        'name': name,
+                        'price_change_pct': round(price_change_pct, 2),
+                        'confidence': result.get('confidence', 'MEDIUM')
+                    })
+                
+                successful += 1
+                print(f"[INFO] Completed {code}: {prediction} ({price_change_pct:.2f}%)")
+            else:
+                error_msg = result.get('error', 'Analysis failed') if result else 'Analysis failed'
+                df.at[index, 'Status'] = 'Error'
+                df.at[index, 'Reason'] = error_msg
+                failed += 1
+                print(f"[ERROR] Failed {code}: {error_msg}")
+                
+        except Exception as e:
+            df.at[index, 'Status'] = 'Error'
+            df.at[index, 'Reason'] = str(e)
+            failed += 1
+            print(f"[ERROR] Exception processing row {index}: {str(e)}")
+    
+    # Sort top picks by price change percentage
+    top_picks = sorted(top_picks, key=lambda x: x['price_change_pct'], reverse=True)[:10]
+    
+    # Generate report
+    report = {
+        "total": total,
+        "successful": successful,
+        "failed": failed,
+        "up": up_count,
+        "down": down_count,
+        "hold": hold_count,
+        "top_picks": top_picks,
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    
+    return df, report
+
+
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    """
+    Upload Excel file for batch stock analysis
+    
+    Expects:
+        - file: Excel file (.xlsx or .xls)
+        - Columns: A=code, B=name
+    
+    Returns:
+        JSON: Processing results with download URL
+    """
+    lang = get_lang()
+    
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return api_response(error="No file provided", status_code=400, lang=lang)
+        
+        file = request.files['file']
+        
+        # Check if file was selected
+        if file.filename == '':
+            return api_response(error="No file selected", status_code=400, lang=lang)
+        
+        # Validate file type
+        if not allowed_file(file.filename):
+            return api_response(
+                error="Invalid file type. Please upload .xlsx or .xls file",
+                status_code=400,
+                lang=lang
+            )
+        
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        upload_filename = f"{timestamp}_{filename}"
+        upload_path = os.path.join(UPLOAD_FOLDER, upload_filename)
+        file.save(upload_path)
+        print(f"[INFO] File saved: {upload_path}")
+        
+        # Read Excel file
+        try:
+            df = pd.read_excel(upload_path)
+            print(f"[INFO] Loaded Excel with {len(df)} rows")
+        except Exception as e:
+            return api_response(
+                error=f"Failed to read Excel file: {str(e)}",
+                status_code=400,
+                lang=lang
+            )
+        
+        # Validate Excel format
+        if df.empty:
+            return api_response(error="Excel file is empty", status_code=400, lang=lang)
+        
+        if len(df.columns) < 2:
+            return api_response(
+                error="Excel must have at least 2 columns (code, name)",
+                status_code=400,
+                lang=lang
+            )
+        
+        # Check row limit
+        if len(df) > 1000:
+            return api_response(
+                error="Maximum 1000 rows allowed per upload",
+                status_code=400,
+                lang=lang
+            )
+        
+        print(f"[INFO] Starting batch processing for {len(df)} stocks")
+        
+        # Process batch
+        processed_df, report = process_stock_batch(df)
+        
+        # Save output Excel
+        output_filename = f"analysis_{timestamp}.xlsx"
+        output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+        
+        try:
+            processed_df.to_excel(output_path, index=False, sheet_name='Stock Analysis')
+            print(f"[INFO] Output saved: {output_path}")
+        except Exception as e:
+            return api_response(
+                error=f"Failed to save output file: {str(e)}",
+                status_code=500,
+                lang=lang
+            )
+        
+        # Clean up uploaded file
+        try:
+            os.remove(upload_path)
+        except Exception as e:
+            print(f"[WARNING] Failed to clean up upload file: {str(e)}")
+        
+        return api_response(data={
+            "report": report,
+            "download_url": f"/download/{output_filename}",
+            "output_file": output_filename
+        }, lang=lang)
+    
+    except Exception as e:
+        print(f"[ERROR] Unexpected error in /api/upload: {str(e)}")
+        return api_response(error=f"Internal server error: {str(e)}", status_code=500, lang=lang)
+
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    """
+    Download processed Excel file
+    
+    Args:
+        filename (str): Name of the file to download
+    
+    Returns:
+        File: Excel file as attachment
+    """
+    try:
+        # Validate filename
+        if not filename.endswith('.xlsx'):
+            return api_response(error="Invalid file type", status_code=400, lang=get_lang())
+        
+        # Secure the filename
+        filename = secure_filename(filename)
+        file_path = os.path.join(OUTPUT_FOLDER, filename)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return api_response(error="File not found", status_code=404, lang=get_lang())
+        
+        print(f"[INFO] Downloading file: {file_path}")
+        
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    
+    except Exception as e:
+        print(f"[ERROR] Download failed: {str(e)}")
+        return api_response(error=f"Download failed: {str(e)}", status_code=500, lang=get_lang())
 
 
 # ==================== ERROR HANDLERS ====================
