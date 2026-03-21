@@ -532,16 +532,11 @@ def internal_error(e):
     print(f"[ERROR] Internal server error: {str(e)}")
     return api_response(error="Internal server error", status_code=500)
 
-
-<<<<<<< HEAD
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-=======
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     print(f"[INFO] Starting Stock Analytics API on port {port}")
     print(f"[INFO] Supported symbols: {', '.join(SUPPORTED_SYMBOLS)}")
     app.run(host="0.0.0.0", port=port)
->>>>>>> d597b89 (Stability: improved error handling, API consistency, logging, health endpoint)
