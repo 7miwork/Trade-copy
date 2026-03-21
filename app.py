@@ -727,77 +727,111 @@ def upload_file():
     print("[INFO] Upload endpoint called")
     
     try:
-        # Check if file is present
-        if 'file' not in request.files:
-            print("[ERROR] No file in request.files")
-            return api_response(error="No file provided", status_code=400, lang=lang)
+        # SAFEGUARD 1: Check if file is present
+        file = request.files.get("file")
         
-        file = request.files['file']
+        if not file:
+            print("[ERROR] No file in request.files")
+            return jsonify({"success": False, "error": "No file provided"}), 400
+        
         print(f"[INFO] File received: {file.filename}")
         
-        # Check if file was selected
+        # SAFEGUARD 2: Check if file was selected
         if file.filename == '':
             print("[ERROR] Empty filename")
-            return api_response(error="No file selected", status_code=400, lang=lang)
+            return jsonify({"success": False, "error": "No file selected"}), 400
         
-        # Validate file type
+        # SAFEGUARD 3: Validate file type
         if not allowed_file(file.filename):
             print(f"[ERROR] Invalid file type: {file.filename}")
-            return api_response(
-                error="Invalid file type. Please upload .xlsx or .xls file",
-                status_code=400,
-                lang=lang
-            )
+            return jsonify({
+                "success": False,
+                "error": "Invalid file type. Please upload .xlsx or .xls file"
+            }), 400
         
-        # Save uploaded file
-        filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        upload_filename = f"{timestamp}_{filename}"
-        upload_path = os.path.join(UPLOAD_FOLDER, upload_filename)
-        file.save(upload_path)
-        print(f"[INFO] File saved: {upload_path}")
+        # SAFEGUARD 4: Save uploaded file safely
+        try:
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            upload_filename = f"{timestamp}_{filename}"
+            upload_path = os.path.join(UPLOAD_FOLDER, upload_filename)
+            file.save(upload_path)
+            print(f"[INFO] File saved: {upload_path}")
+        except Exception as e:
+            print(f"[ERROR] Failed to save file: {str(e)}")
+            return jsonify({
+                "success": False,
+                "error": f"Failed to save file: {str(e)}"
+            }), 500
         
-        # Read Excel file
+        # SAFEGUARD 5: Read Excel file safely
         try:
             df = pd.read_excel(upload_path)
             print(f"[INFO] Loaded Excel with {len(df)} rows")
         except Exception as e:
             print(f"[ERROR] Failed to read Excel: {str(e)}")
-            return api_response(
-                error=f"Failed to read Excel file: {str(e)}",
-                status_code=400,
-                lang=lang
-            )
+            # Clean up uploaded file
+            try:
+                os.remove(upload_path)
+            except:
+                pass
+            return jsonify({
+                "success": False,
+                "error": f"Excel read failed: {str(e)}"
+            }), 400
         
-        # Validate Excel format
+        # SAFEGUARD 6: Validate Excel format
         if df.empty:
             print("[ERROR] Excel file is empty")
-            return api_response(error="Excel file is empty", status_code=400, lang=lang)
+            try:
+                os.remove(upload_path)
+            except:
+                pass
+            return jsonify({"success": False, "error": "Excel file is empty"}), 400
         
         if len(df.columns) < 2:
             print(f"[ERROR] Excel has only {len(df.columns)} columns")
-            return api_response(
-                error="Excel must have at least 2 columns (code, name)",
-                status_code=400,
-                lang=lang
-            )
+            try:
+                os.remove(upload_path)
+            except:
+                pass
+            return jsonify({
+                "success": False,
+                "error": "Excel must have at least 2 columns (code, name)"
+            }), 400
         
-        # Check row limit
+        # SAFEGUARD 7: Check row limit
         if len(df) > 1000:
             print(f"[ERROR] Excel has {len(df)} rows (max 1000)")
-            return api_response(
-                error="Maximum 1000 rows allowed per upload",
-                status_code=400,
-                lang=lang
-            )
+            try:
+                os.remove(upload_path)
+            except:
+                pass
+            return jsonify({
+                "success": False,
+                "error": "Maximum 1000 rows allowed per upload"
+            }), 400
         
         print(f"[INFO] Starting batch processing for {len(df)} stocks")
         
-        # Process batch
-        processed_df, report = process_stock_batch(df)
-        print(f"[INFO] Batch processing complete. Report: {report}")
+        # SAFEGUARD 8: Process batch safely
+        try:
+            processed_df, report = process_stock_batch(df)
+            print(f"[INFO] Batch processing complete. Report: {report}")
+        except Exception as e:
+            print(f"[ERROR] Batch processing failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            try:
+                os.remove(upload_path)
+            except:
+                pass
+            return jsonify({
+                "success": False,
+                "error": f"Batch processing failed: {str(e)}"
+            }), 500
         
-        # Save output Excel
+        # SAFEGUARD 9: Save output Excel safely
         output_filename = f"analysis_{timestamp}.xlsx"
         output_path = os.path.join(OUTPUT_FOLDER, output_filename)
         
@@ -806,19 +840,25 @@ def upload_file():
             print(f"[INFO] Output saved: {output_path}")
         except Exception as e:
             print(f"[ERROR] Failed to save output: {str(e)}")
-            return api_response(
-                error=f"Failed to save output file: {str(e)}",
-                status_code=500,
-                lang=lang
-            )
+            import traceback
+            traceback.print_exc()
+            try:
+                os.remove(upload_path)
+            except:
+                pass
+            return jsonify({
+                "success": False,
+                "error": f"Excel write failed: {str(e)}"
+            }), 500
         
-        # Clean up uploaded file
+        # SAFEGUARD 10: Clean up uploaded file
         try:
             os.remove(upload_path)
             print(f"[INFO] Cleaned up upload file: {upload_path}")
         except Exception as e:
             print(f"[WARNING] Failed to clean up upload file: {str(e)}")
         
+        # SAFEGUARD 11: Return success response
         response_data = {
             "report": report,
             "download_url": f"/download/{output_filename}",
@@ -826,13 +866,19 @@ def upload_file():
         }
         print(f"[INFO] Returning success response: {response_data}")
         
-        return api_response(data=response_data, lang=lang)
+        return jsonify({
+            "success": True,
+            "data": response_data
+        }), 200
     
     except Exception as e:
-        print(f"[ERROR] Unexpected error in /api/upload: {str(e)}")
+        print(f"[FATAL ERROR] Unexpected error in /api/upload: {str(e)}")
         import traceback
         traceback.print_exc()
-        return api_response(error=f"Internal server error: {str(e)}", status_code=500, lang=lang)
+        return jsonify({
+            "success": False,
+            "error": f"Fatal error: {str(e)}"
+        }), 500
 
 
 @app.route('/download/<filename>')
