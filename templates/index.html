@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analytics Platform</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 Stock Analytics Platform</h1>
+            <p class="subtitle">AI-Powered Stock Market Analysis & Forecasting</p>
+        </header>
+
+        <!-- Stock Selector -->
+        <div class="card selector-card">
+            <form method="GET" action="/" class="stock-selector">
+                <label for="symbol">Select Stock:</label>
+                <select name="symbol" id="symbol" onchange="this.form.submit()">
+                    {% for sym in symbols %}
+                    <option value="{{ sym }}" {% if sym == result.symbol %}selected{% endif %}>{{ sym }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn-analyze">Analyze</button>
+            </form>
+        </div>
+
+        {% if result.error %}
+        <div class="card error-card">
+            <h2>⚠️ Error</h2>
+            <p>{{ result.error }}</p>
+        </div>
+        {% else %}
+        <main>
+            <!-- Main Stats Card -->
+            <div class="card main-card">
+                <div class="card-header">
+                    <h2>{{ result.symbol }}</h2>
+                    <span class="timestamp">Last updated: {{ result.timestamp }}</span>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <label>Current Price</label>
+                        <span class="price">${{ "{:,.2f}".format(result.current_price) }}</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <label>Predicted Price</label>
+                        <span class="price">${{ "{:,.2f}".format(result.predicted_price) }}</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <label>Price Change</label>
+                        <span class="change {% if result.price_change > 0 %}positive{% elif result.price_change < 0 %}negative{% endif %}">
+                            {% if result.price_change > 0 %}+{% endif %}${{ "{:,.2f}".format(result.price_change) }}
+                            ({% if result.price_change_pct > 0 %}+{% endif %}{{ "{:.2f}".format(result.price_change_pct) }}%)
+                        </span>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <label>Confidence</label>
+                        <span class="confidence {{ result.confidence|lower }}">{{ result.confidence }}</span>
+                    </div>
+                </div>
+
+                <div class="signal-container">
+                    <div class="signal" style="background-color: {{ result.signal_color }}">
+                        <span class="signal-text">{{ result.signal }}</span>
+                    </div>
+                    <p class="signal-description">{{ result.signal_description }}</p>
+                </div>
+            </div>
+
+            <!-- Indicators Card -->
+            <div class="card indicators-card">
+                <h3>Technical Indicators</h3>
+                <div class="indicators-grid">
+                    <div class="indicator-item">
+                        <label>RSI</label>
+                        <span class="value">{{ "{:.1f}".format(result.indicators.rsi) if result.indicators.rsi else 'N/A' }}</span>
+                        <span class="signal-badge {{ result.indicator_signals.rsi_signal|lower if result.indicator_signals.rsi_signal else '' }}">
+                            {{ result.indicator_signals.rsi_signal if result.indicator_signals.rsi_signal else 'N/A' }}
+                        </span>
+                    </div>
+                    <div class="indicator-item">
+                        <label>SMA (20)</label>
+                        <span class="value">${{ "{:,.2f}".format(result.indicators.sma) if result.indicators.sma else 'N/A' }}</span>
+                    </div>
+                    <div class="indicator-item">
+                        <label>EMA (20)</label>
+                        <span class="value">${{ "{:,.2f}".format(result.indicators.ema) if result.indicators.ema else 'N/A' }}</span>
+                    </div>
+                    <div class="indicator-item">
+                        <label>MACD</label>
+                        <span class="value">{{ "{:.2f}".format(result.indicators.macd) if result.indicators.macd else 'N/A' }}</span>
+                        <span class="signal-badge {{ result.indicator_signals.macd_signal|lower if result.indicator_signals.macd_signal else '' }}">
+                            {{ result.indicator_signals.macd_signal if result.indicator_signals.macd_signal else 'N/A' }}
+                        </span>
+                    </div>
+                    <div class="indicator-item">
+                        <label>Momentum</label>
+                        <span class="value">{{ "{:.2f}".format(result.indicators.momentum) if result.indicators.momentum else 'N/A' }}</span>
+                    </div>
+                    <div class="indicator-item">
+                        <label>Bollinger Bands</label>
+                        <span class="value">${{ "{:,.2f}".format(result.indicators.bb_lower) if result.indicators.bb_lower else 'N/A' }} - ${{ "{:,.2f}".format(result.indicators.bb_upper) if result.indicators.bb_upper else 'N/A' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Analysis Card -->
+            <div class="card ai-card">
+                <h3>🤖 AI Analysis</h3>
+                <p class="ai-text">{{ result.ai_analysis.analysis }}</p>
+                <div class="ai-meta">
+                    <span>Model: {{ result.ai_analysis.model }}</span>
+                    <span>Confidence: {{ result.ai_analysis.confidence }}</span>
+                </div>
+            </div>
+
+            <!-- Risk Assessment Card -->
+            <div class="card risk-card">
+                <h3>⚠️ Risk Assessment</h3>
+                <div class="risk-content">
+                    <div class="risk-level">
+                        <label>Risk Level:</label>
+                        <span class="risk-badge {{ result.risk_assessment.risk_level|replace('-', '') }}">
+                            {{ result.risk_assessment.risk_level|upper }}
+                        </span>
+                    </div>
+                    <p class="risk-recommendation">{{ result.risk_assessment.recommendation }}</p>
+                </div>
+            </div>
+
+            <!-- Chart Card -->
+            <div class="card chart-card">
+                <h3>Price History (Last 30 Days)</h3>
+                <div class="chart-container">
+                    <canvas id="priceChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Prediction History Card -->
+            <div class="card history-card">
+                <h3>Analysis History</h3>
+                {% if history %}
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Symbol</th>
+                            <th>Current</th>
+                            <th>Predicted</th>
+                            <th>Signal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in history[:10] %}
+                        <tr>
+                            <td>{{ item.timestamp }}</td>
+                            <td>{{ item.symbol }}</td>
+                            <td>${{ "{:,.2f}".format(item.current_price) }}</td>
+                            <td>${{ "{:,.2f}".format(item.predicted_price) }}</td>
+                            <td>
+                                <span class="signal-badge 
+                                    {% if item.signal == 'BUY' %}buy{% elif item.signal == 'SELL' %}sell{% else %}hold{% endif %}">
+                                    {{ item.signal }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="no-history">No analysis history yet. Select a stock to begin.</p>
+                {% endif %}
+            </div>
+        </main>
+        {% endif %}
+
+        <footer>
+            <p>Stock Analytics Platform | REST API available for mobile integration</p>
+            <p class="api-info">API: /api/analyze | /api/batch | /api/export</p>
+        </footer>
+    </div>
+
+    <script>
+        // Chart.js configuration
+        {% if not result.error %}
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        
+        const dates = {{ result.dates | tojson }};
+        const prices = {{ result.prices | tojson }};
+        
+        // Add predicted point
+        const predictedDate = 'Predicted';
+        const predictedPrice = {{ result.predicted_price }};
+        
+        const allDates = [...dates, predictedDate];
+        const allPrices = [...prices, predictedPrice];
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: allDates,
+                datasets: [{
+                    label: '{{ result.symbol }} Price',
+                    data: allPrices,
+                    borderColor: '#00d4ff',
+                    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: function(context) {
+                        const index = context.dataIndex;
+                        if (index === allPrices.length - 1) {
+                            return '{{ result.signal_color }}';
+                        }
+                        return '#00d4ff';
+                    },
+                    pointBorderColor: function(context) {
+                        const index = context.dataIndex;
+                        if (index === allPrices.length - 1) {
+                            return '{{ result.signal_color }}';
+                        }
+                        return '#00d4ff';
+                    },
+                    pointRadius: function(context) {
+                        const index = context.dataIndex;
+                        if (index === allPrices.length - 1) {
+                            return 8;
+                        }
+                        return 3;
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '$' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: '#888888',
+                            maxRotation: 45,
+                            minRotation: 45
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#888888',
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
+    </script>
+</body>
+</html>
