@@ -79,6 +79,70 @@ def analyze_stock_ai(code, name):
         return {"prediction": "ERROR", "reason": str(e)}
 
 
+def analyze_batch_ai(batch):
+    """
+    Analyze a batch of stocks using OpenAI GPT
+    
+    Args:
+        batch (list): List of dicts with "code" and "name"
+    
+    Returns:
+        list: List of dicts with "prediction" and "reason"
+    """
+    if not OPENAI_AVAILABLE:
+        return [{"prediction": "ERROR", "reason": "OpenAI not configured"}] * len(batch)
+    
+    try:
+        # Format batch for prompt
+        batch_text = "\n".join([f"- {item['code']} - {item['name']}" for item in batch])
+        
+        prompt = f"""
+        You are a stock analyst.
+
+        Analyze the following stocks and predict short-term direction.
+
+        For each stock return:
+        - prediction: UP or DOWN
+        - reason: short explanation
+
+        Respond ONLY as JSON array.
+
+        Stocks:
+        {batch_text}
+        """
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+
+        text = response.choices[0].message.content.strip()
+        print(f"[BATCH AI] Response: {text[:200]}...")
+        
+        import json
+        return json.loads(text)
+
+    except Exception as e:
+        print(f"[BATCH AI ERROR] {str(e)}")
+        return [{"prediction": "ERROR", "reason": str(e)}] * len(batch)
+
+
+def chunk_list(data, size=20):
+    """
+    Split a list into chunks of specified size
+    
+    Args:
+        data (list): List to split
+        size (int): Chunk size
+    
+    Yields:
+        list: Chunks of the original list
+    """
+    for i in range(0, len(data), size):
+        yield data[i:i + size]
+
+
 app = Flask(__name__)
 app.secret_key = 'stock-analytics-secret-key-2024'
 app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB max file size
@@ -817,46 +881,49 @@ def upload():
                 "error": "Excel must have at least 2 columns"
             }), 400
         
-        # SAFEGUARD 5: Limit rows for AI processing
-        if len(df) > 20:
-            return jsonify({
-                "success": False,
-                "error": "Too many rows (max 20 for now)"
-            }), 400
+        # Prepare rows for batch processing
+        rows = []
+        for _, row in df.iterrows():
+            rows.append({
+                "code": str(row.iloc[0]),
+                "name": str(row.iloc[1])
+            })
         
-        results = []
-        reasons = []
+        print(f"[INFO] Processing {len(rows)} stocks in batches")
         
-        for i, row in df.iterrows():
-            try:
-                code = str(row.iloc[0])
-                name = str(row.iloc[1])
-                
-                print(f"[INFO] Processing {code} - {name}")
-                
-                # Use AI for prediction
-                ai_result = analyze_stock_ai(code, name)
-                
-                results.append(ai_result["prediction"])
-                reasons.append(ai_result["reason"])
-                
-            except Exception as e:
-                print(f"[ROW ERROR] {str(e)}")
-                results.append("ERROR")
-                reasons.append(str(e))
+        # Process in batches of 20
+        all_results = []
+        batch_num = 0
         
-        df["Prediction"] = results
-        df["Reason"] = reasons
+        for batch in chunk_list(rows, 20):
+            batch_num += 1
+            print(f"[PROGRESS] Processing batch {batch_num} ({len(batch)} stocks)")
+            
+            batch_results = analyze_batch_ai(batch)
+            
+            # Fallback safety - ensure batch size matches
+            if len(batch_results) != len(batch):
+                print(f"[WARNING] Batch size mismatch: expected {len(batch)}, got {len(batch_results)}")
+                batch_results = [{"prediction": "ERROR", "reason": "Mismatch"}] * len(batch)
+            
+            all_results.extend(batch_results)
+            print(f"[PROGRESS] {len(all_results)}/{len(rows)} processed")
+        
+        # Apply results to dataframe
+        df["Prediction"] = [r["prediction"] for r in all_results]
+        df["Reason"] = [r["reason"] for r in all_results]
         
         # Calculate summary
         summary = {
             "total": len(df),
-            "up": results.count("UP"),
-            "down": results.count("DOWN"),
-            "errors": results.count("ERROR")
+            "up": sum(1 for r in all_results if r["prediction"] == "UP"),
+            "down": sum(1 for r in all_results if r["prediction"] == "DOWN"),
+            "errors": sum(1 for r in all_results if r["prediction"] == "ERROR")
         }
         
-        # SAFEGUARD 6: Save safely to /tmp/ (Render restriction)
+        print(f"[INFO] Processing complete: {summary}")
+        
+        # SAFEGUARD 5: Save safely to /tmp/ (Render restriction)
         try:
             output_path = "/tmp/output.xlsx"
             df.to_excel(output_path, index=False)
