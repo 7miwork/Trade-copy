@@ -21,6 +21,64 @@ from ai_placeholder import get_ai_analysis, get_risk_assessment
 from config import SUPPORTED_SYMBOLS, EXPORT_PATH, DEFAULT_SYMBOL
 from translations import t, get_all_translations
 
+# OpenAI integration for AI stock analysis
+try:
+    from openai import OpenAI
+    openai_client = OpenAI()
+    OPENAI_AVAILABLE = True
+    print("[INFO] OpenAI client initialized")
+except Exception as e:
+    OPENAI_AVAILABLE = False
+    print(f"[WARNING] OpenAI not available: {str(e)}")
+
+
+def analyze_stock_ai(code, name):
+    """
+    Analyze stock using OpenAI GPT
+    
+    Args:
+        code (str): Stock code
+        name (str): Stock name
+    
+    Returns:
+        dict: {"prediction": "UP/DOWN/ERROR", "reason": "..."}
+    """
+    if not OPENAI_AVAILABLE:
+        return {"prediction": "ERROR", "reason": "OpenAI not configured"}
+    
+    try:
+        prompt = f"""
+        You are a stock analyst.
+
+        Analyze:
+        {code} - {name}
+
+        Predict UP or DOWN and give short reason.
+
+        JSON only:
+        {{
+            "prediction": "UP",
+            "reason": "Strong momentum"
+        }}
+        """
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+
+        text = response.choices[0].message.content.strip()
+        print(f"[AI] Response for {code}: {text}")
+        
+        import json
+        return json.loads(text)
+
+    except Exception as e:
+        print(f"[AI ERROR] {code}: {str(e)}")
+        return {"prediction": "ERROR", "reason": str(e)}
+
+
 app = Flask(__name__)
 app.secret_key = 'stock-analytics-secret-key-2024'
 app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB max file size
@@ -711,9 +769,9 @@ def process_stock_batch(df):
 
 
 @app.route('/api/upload', methods=['POST'])
-def upload_file():
+def upload():
     """
-    Upload Excel file for batch stock analysis
+    Upload Excel file for batch stock analysis with AI
     
     Expects:
         - file: Excel file (.xlsx or .xls)
@@ -722,162 +780,138 @@ def upload_file():
     Returns:
         JSON: Processing results with download URL
     """
-    lang = get_lang()
-    
-    print("[INFO] Upload endpoint called")
-    
     try:
+        print("[INFO] Upload request received")
+        
         # SAFEGUARD 1: Check if file is present
-        file = request.files.get("file")
+        if "file" not in request.files:
+            return jsonify({
+                "success": False,
+                "error": "No file in request"
+            }), 400
         
-        if not file:
-            print("[ERROR] No file in request.files")
-            return jsonify({"success": False, "error": "No file provided"}), 400
-        
-        print(f"[INFO] File received: {file.filename}")
+        file = request.files["file"]
         
         # SAFEGUARD 2: Check if file was selected
-        if file.filename == '':
-            print("[ERROR] Empty filename")
-            return jsonify({"success": False, "error": "No file selected"}), 400
-        
-        # SAFEGUARD 3: Validate file type
-        if not allowed_file(file.filename):
-            print(f"[ERROR] Invalid file type: {file.filename}")
+        if file.filename == "":
             return jsonify({
                 "success": False,
-                "error": "Invalid file type. Please upload .xlsx or .xls file"
+                "error": "Empty filename"
             }), 400
         
-        # SAFEGUARD 4: Save uploaded file safely
+        # SAFEGUARD 3: Read Excel safely
         try:
-            filename = secure_filename(file.filename)
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            upload_filename = f"{timestamp}_{filename}"
-            upload_path = os.path.join(UPLOAD_FOLDER, upload_filename)
-            file.save(upload_path)
-            print(f"[INFO] File saved: {upload_path}")
+            df = pd.read_excel(file, engine="openpyxl")
+            print("[INFO] Excel loaded:", df.shape)
         except Exception as e:
-            print(f"[ERROR] Failed to save file: {str(e)}")
+            print("[ERROR] Excel read failed:", str(e))
             return jsonify({
                 "success": False,
-                "error": f"Failed to save file: {str(e)}"
-            }), 500
-        
-        # SAFEGUARD 5: Read Excel file safely
-        try:
-            df = pd.read_excel(upload_path)
-            print(f"[INFO] Loaded Excel with {len(df)} rows")
-        except Exception as e:
-            print(f"[ERROR] Failed to read Excel: {str(e)}")
-            # Clean up uploaded file
-            try:
-                os.remove(upload_path)
-            except:
-                pass
-            return jsonify({
-                "success": False,
-                "error": f"Excel read failed: {str(e)}"
+                "error": "Failed to read Excel: " + str(e)
             }), 400
         
-        # SAFEGUARD 6: Validate Excel format
-        if df.empty:
-            print("[ERROR] Excel file is empty")
-            try:
-                os.remove(upload_path)
-            except:
-                pass
-            return jsonify({"success": False, "error": "Excel file is empty"}), 400
-        
-        if len(df.columns) < 2:
-            print(f"[ERROR] Excel has only {len(df.columns)} columns")
-            try:
-                os.remove(upload_path)
-            except:
-                pass
+        # SAFEGUARD 4: Validate columns
+        if df.shape[1] < 2:
             return jsonify({
                 "success": False,
-                "error": "Excel must have at least 2 columns (code, name)"
+                "error": "Excel must have at least 2 columns"
             }), 400
         
-        # SAFEGUARD 7: Check row limit
-        if len(df) > 1000:
-            print(f"[ERROR] Excel has {len(df)} rows (max 1000)")
-            try:
-                os.remove(upload_path)
-            except:
-                pass
+        # SAFEGUARD 5: Limit rows for AI processing
+        if len(df) > 20:
             return jsonify({
                 "success": False,
-                "error": "Maximum 1000 rows allowed per upload"
+                "error": "Too many rows (max 20 for now)"
             }), 400
         
-        print(f"[INFO] Starting batch processing for {len(df)} stocks")
+        results = []
+        reasons = []
         
-        # SAFEGUARD 8: Process batch safely
-        try:
-            processed_df, report = process_stock_batch(df)
-            print(f"[INFO] Batch processing complete. Report: {report}")
-        except Exception as e:
-            print(f"[ERROR] Batch processing failed: {str(e)}")
-            import traceback
-            traceback.print_exc()
+        for i, row in df.iterrows():
             try:
-                os.remove(upload_path)
-            except:
-                pass
-            return jsonify({
-                "success": False,
-                "error": f"Batch processing failed: {str(e)}"
-            }), 500
+                code = str(row.iloc[0])
+                name = str(row.iloc[1])
+                
+                print(f"[INFO] Processing {code} - {name}")
+                
+                # Use AI for prediction
+                ai_result = analyze_stock_ai(code, name)
+                
+                results.append(ai_result["prediction"])
+                reasons.append(ai_result["reason"])
+                
+            except Exception as e:
+                print(f"[ROW ERROR] {str(e)}")
+                results.append("ERROR")
+                reasons.append(str(e))
         
-        # SAFEGUARD 9: Save output Excel safely
-        output_filename = f"analysis_{timestamp}.xlsx"
-        output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+        df["Prediction"] = results
+        df["Reason"] = reasons
         
-        try:
-            processed_df.to_excel(output_path, index=False, sheet_name='Stock Analysis')
-            print(f"[INFO] Output saved: {output_path}")
-        except Exception as e:
-            print(f"[ERROR] Failed to save output: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            try:
-                os.remove(upload_path)
-            except:
-                pass
-            return jsonify({
-                "success": False,
-                "error": f"Excel write failed: {str(e)}"
-            }), 500
-        
-        # SAFEGUARD 10: Clean up uploaded file
-        try:
-            os.remove(upload_path)
-            print(f"[INFO] Cleaned up upload file: {upload_path}")
-        except Exception as e:
-            print(f"[WARNING] Failed to clean up upload file: {str(e)}")
-        
-        # SAFEGUARD 11: Return success response
-        response_data = {
-            "report": report,
-            "download_url": f"/download/{output_filename}",
-            "output_file": output_filename
+        # Calculate summary
+        summary = {
+            "total": len(df),
+            "up": results.count("UP"),
+            "down": results.count("DOWN"),
+            "errors": results.count("ERROR")
         }
-        print(f"[INFO] Returning success response: {response_data}")
+        
+        # SAFEGUARD 6: Save safely to /tmp/ (Render restriction)
+        try:
+            output_path = "/tmp/output.xlsx"
+            df.to_excel(output_path, index=False)
+        except Exception as e:
+            print("[ERROR] Excel write failed:", str(e))
+            return jsonify({
+                "success": False,
+                "error": "Failed to save Excel: " + str(e)
+            }), 500
         
         return jsonify({
             "success": True,
-            "data": response_data
-        }), 200
+            "summary": summary,
+            "download_url": "/download/output.xlsx"
+        })
     
     except Exception as e:
-        print(f"[FATAL ERROR] Unexpected error in /api/upload: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print("[FATAL ERROR]", str(e))
         return jsonify({
             "success": False,
-            "error": f"Fatal error: {str(e)}"
+            "error": "Fatal server error: " + str(e)
+        }), 500
+
+
+@app.route('/download/output.xlsx')
+def download_output():
+    """
+    Download processed Excel file from /tmp/
+    
+    Returns:
+        File: Excel file as attachment
+    """
+    try:
+        output_path = "/tmp/output.xlsx"
+        
+        if not os.path.exists(output_path):
+            return jsonify({
+                "success": False,
+                "error": "File not found"
+            }), 404
+        
+        print(f"[INFO] Downloading file: {output_path}")
+        
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name="output.xlsx",
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    
+    except Exception as e:
+        print(f"[ERROR] Download failed: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "Download failed: " + str(e)
         }), 500
 
 
